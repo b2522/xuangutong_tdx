@@ -338,6 +338,7 @@
         let currentStocks = [];
         let currentSortField = null;
         let sortDirection = 'desc';
+        let autoRefreshTimer = null;
         
         function isWeekend(date) {
             const day = date.getDay();
@@ -388,6 +389,19 @@
         
         function isWorkday(date) {
             return !isWeekend(date) && !isHoliday(date);
+        }
+        
+        function isTradingTime(date) {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const time = hours * 60 + minutes;
+            
+            const morningStart = 9 * 60 + 25;
+            const morningEnd = 11 * 60 + 30;
+            const afternoonStart = 13 * 60;
+            const afternoonEnd = 15 * 60;
+            
+            return (time >= morningStart && time <= morningEnd) || (time >= afternoonStart && time <= afternoonEnd);
         }
         
         function findRecentWorkday(date) {
@@ -872,9 +886,31 @@
             }
         }
         
+        function startAutoRefresh() {
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+            }
+            
+            autoRefreshTimer = setInterval(async () => {
+                const now = new Date();
+                
+                if (isTradingTime(now) && currentStocks.length > 0) {
+                    await renderStocks(currentStocks);
+                }
+            }, 60000);
+        }
+        
+        function stopAutoRefresh() {
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+        }
+        
         window.onload = function() {
             initDatePicker();
             fetchData();
+            startAutoRefresh();
         };
     </script>
 </body>
