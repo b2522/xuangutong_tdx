@@ -115,11 +115,11 @@
             font-size: 10px;
         }
         .left-table { 
-            width: 100%;
+            width: 160px;
             table-layout: fixed; 
         }
         .rank-column { width: 30px; min-width: 30px; max-width: 30px; }
-        .left-table .name-column { width: 150px; min-width: 150px; max-width: 150px; }
+        .left-table .name-column { width: 100px !important; min-width: 100px !important; max-width: 100px !important; }
         .count-column { width: 40px; min-width: 40px; max-width: 40px; }
         
         .right-table { 
@@ -133,7 +133,7 @@
         .value-column { width: 80px; }
         .turnover-column { width: 60px; }
         .boards-column { width: 70px; }
-        .description-column { width: 200px; }
+        .description-column { width: 260px; }
         
         .sortable {
             cursor: pointer;
@@ -292,8 +292,8 @@
                     <table class="left-table" id="conceptTable">
                         <thead>
                             <tr>
-                                <th class="name-column">题材名称</th>
-                                <th class="count-column">数量</th>
+                                <th class="name-column" style="width: 120px !important; min-width: 120px !important; max-width: 120px !important;">题材名称</th>
+                                <th class="count-column" style="width: 40px !important; min-width: 40px !important; max-width: 40px !important;">数量</th>
                             </tr>
                         </thead>
                         <tbody id="conceptBody">
