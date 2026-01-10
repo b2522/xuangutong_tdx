@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -113,7 +114,7 @@
             text-align: center;
             margin: 10px 0 3px 0;
             color: white;
-            font-size: 10px;
+            font-size: 12px;
         }
         .left-table { 
             width: 160px;
@@ -273,22 +274,17 @@
 </head>
 <body>
     <div class="container">
-        <h1>最强题材解读</h1>
-        
-        <div class="header-container">
+         <div class="header-container">
             <div class="date-selector">
-                <input type="date" id="datePicker" placeholder="年/月/日" onchange="onDateChange()">
+                <span class="market-label" style="font-size: 14px;">
+                    <span style="color: orange;">橙色字体【创业板】</span> <span style="color: rgba(60, 127, 250, 0.781);">蓝色字体【科创板】</span>
+                </span>
+                <span style="color: var(--text-color); font-size: 14px;"> | </span>
+                <input type="date" id="datePicker" placeholder="选择日期" onchange="onDateChange()" class="filter-input">
+                <div style="margin-left: auto; color: orange !important; font-size: 14px;">
+                    公众号：别浪 好好学习
+                </div>
             </div>
-            <div style="font-size: 14px; color: #cccccc; margin-left: 10px;">
-               <span style="color: orange;">橙色字体【创业板】</span> <span style="color: rgba(60, 127, 250, 0.781);">蓝色字体【科创板】</span>                
-            </div>
-            <div class="font-size-control">
-                <button class="font-size-btn" onclick="changeFontSize(-1)">--</button>
-                <button class="font-size-btn" onclick="changeFontSize(0)">A</button>
-                <button class="font-size-btn" onclick="changeFontSize(1)">++</button>
-                <span class="font-size-display" id="fontSizeDisplay">14px</span>
-            </div>
-            <div class="concept-title" id="detailTitle">请选择题材</div>
         </div>
         
         <div class="content">
@@ -332,7 +328,7 @@
         </div>
         
         <div class="footer">
-            【公众号：别浪 好好学习】 生成时间: <span id="generateTime"></span>
+            生成时间: <span id="generateTime"></span>
         </div>
     </div>
     
@@ -553,7 +549,7 @@
             if (!codes || codes.length === 0) return {};
             
             const secIds = codes.map(code => getSecId(code)).join(',');
-            // 使用后端代理API解决CORS跨域问题
+            // 直接调用东方财富API获取实时数据
             const API_URL = `https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f6,f12,f14&fltt=2&secids=${secIds}`;
             console.log('Fetching real-time data from:', API_URL);
             
@@ -610,7 +606,7 @@
             const detailBody = document.getElementById('detailBody');
             
             conceptBody.innerHTML = '<tr><td colspan="3" class="loading">加载中...</td></tr>';
-            detailBody.innerHTML = '<tr><td colspan="7" class="loading">请选择题材查看详情</td></tr>';
+            detailBody.innerHTML = '<tr><td colspan="8" class="loading">请选择题材查看详情</td></tr>';
             
             try {
                 const response = await fetch(API_URL);
@@ -707,7 +703,6 @@
                     this.classList.add('selected-row');
                     selectedRow = this;
                     
-                    document.getElementById('detailTitle').textContent = conceptName + ' 相关股票';
                     currentSortField = null;
                     sortDirection = 'desc';
                     updateSortIndicators();
