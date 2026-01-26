@@ -551,39 +551,81 @@
             if (!codes || codes.length === 0) return {};
             
             const secIds = codes.map(code => getSecId(code)).join(',');
-            // 直接调用东方财富API获取实时数据
-            const API_URL = `https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f6,f12,f14&fltt=2&secids=${secIds}`;
-            console.log('Fetching real-time data from:', API_URL);
+            const originalUrl = `https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f6,f12,f14&fltt=2&secids=${secIds}`;
+            console.log('Fetching real-time data from:', originalUrl);
+            
+            const corsProxies = [
+                'https://api.allorigins.win/raw?url=',
+                'https://corsproxy.io/?',
+                'https://cors-anywhere.herokuapp.com/',
+                'https://thingproxy.freeboard.io/fetch/'
+            ];
             
             try {
-                const response = await fetch(API_URL, {
+                const response = await fetch(originalUrl, {
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json, text/plain, */*',
                     }
                 });
-                const data = await response.json();
                 
-                console.log('Real-time data response:', data);
-                
-                if (data.rc === 0 && data.data && data.data.diff) {
-                    const realTimeData = {};
-                    data.data.diff.forEach(item => {
-                        realTimeData[item.f12] = {
-                            price: item.f2,
-                            change: item.f3,
-                            amount: item.f6
-                        };
-                    });
-                    console.log('Parsed real-time data:', realTimeData);
-                    return realTimeData;
-                } else {
-                    console.log('Invalid response format:', data);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Direct fetch successful:', data);
+                    
+                    if (data.rc === 0 && data.data && data.data.diff) {
+                        const realTimeData = {};
+                        data.data.diff.forEach(item => {
+                            realTimeData[item.f12] = {
+                                price: item.f2,
+                                change: item.f3,
+                                amount: item.f6
+                            };
+                        });
+                        console.log('Parsed real-time data:', realTimeData);
+                        return realTimeData;
+                    }
                 }
             } catch (error) {
-                console.error('Error fetching real-time data:', error);
+                console.log('Direct fetch failed, trying CORS proxies:', error.message);
             }
             
+            for (const proxyUrl of corsProxies) {
+                try {
+                    const proxiedUrl = proxyUrl + encodeURIComponent(originalUrl);
+                    console.log(`Trying proxy: ${proxyUrl}`);
+                    
+                    const response = await fetch(proxiedUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json, text/plain, */*',
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log(`Proxy ${proxyUrl} successful:`, data);
+                        
+                        if (data.rc === 0 && data.data && data.data.diff) {
+                            const realTimeData = {};
+                            data.data.diff.forEach(item => {
+                                realTimeData[item.f12] = {
+                                    price: item.f2,
+                                    change: item.f3,
+                                    amount: item.f6
+                                };
+                            });
+                            console.log('Parsed real-time data:', realTimeData);
+                            return realTimeData;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Proxy ${proxyUrl} failed:`, error.message);
+                    continue;
+                }
+            }
+            
+            console.log('All fetch methods failed');
             return {};
         }
         
