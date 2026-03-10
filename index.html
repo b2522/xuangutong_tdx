@@ -291,6 +291,10 @@
                 <span style="color: var(--text-color); font-size: 14px;"> | </span>
                 <input type="date" id="datePicker" placeholder="选择日期" onchange="onDateChange()" class="filter-input">
                 <button class="refresh-btn" onclick="location.reload()">刷新</button>
+                <span style="color: var(--text-color); font-size: 14px;"> | </span>
+                <a href="javascript:void(0)" onclick="changeDate(-1)" style="color: white !important; text-decoration: none !important; font-size: 14px;">前一天</a>
+                <span style="color: var(--text-color); font-size: 14px;"> | </span>
+                <a href="javascript:void(0)" onclick="changeDate(1)" style="color: white !important; text-decoration: none !important; font-size: 14px;">后一天</a>
                 <div style="margin-left: auto; color: orange !important; font-size: 14px;">
                     公众号：别浪 好好学习
                     <a href="https://trend.luckin.dpdns.org/" style="margin-left: 20px; color: #4d90fe; text-decoration: none;">查看题材趋势</a>
@@ -455,6 +459,31 @@
             return true;
         }
         
+        function changeDate(days) {
+            const datePicker = document.getElementById('datePicker');
+            const currentDate = datePicker.value;
+            
+            if (!currentDate) {
+                // 如果没有选择日期，使用今天
+                const today = new Date();
+                const newDate = new Date(today);
+                newDate.setDate(today.getDate() + days);
+                
+                const formattedDate = newDate.toISOString().split('T')[0];
+                datePicker.value = formattedDate;
+                onDateChange();
+            } else {
+                // 调整当前选择的日期
+                const selectedDate = new Date(currentDate);
+                const newDate = new Date(selectedDate);
+                newDate.setDate(selectedDate.getDate() + days);
+                
+                const formattedDate = newDate.toISOString().split('T')[0];
+                datePicker.value = formattedDate;
+                onDateChange();
+            }
+        }
+        
         function getSelectedDate() {
             const datePicker = document.getElementById('datePicker');
             const dateValue = datePicker.value;
@@ -464,6 +493,14 @@
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
+            return `${year}${month}${day}`;
+        }
+        
+        function getTodayDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
             return `${year}${month}${day}`;
         }
         
@@ -556,86 +593,69 @@
             }
         }
         
+        // 缓存对象，存储实时数据
+        const realTimeDataCache = {
+            data: {},
+            timestamp: 0,
+            expiry: 5000 // 缓存过期时间：5秒
+        };
+
         async function fetchRealTimeData(codes) {
             if (!codes || codes.length === 0) return {};
-            
+
             const secIds = codes.map(code => getSecId(code)).join(',');
-            const originalUrl = `https://push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f6,f12,f14&fltt=2&secids=${secIds}`;
-            console.log('Fetching real-time data from:', originalUrl);
-            
-            const corsProxies = [
-                'https://api.allorigins.win/raw?url=',
-                'https://corsproxy.io/?',
-                'https://cors-anywhere.herokuapp.com/',
-                'https://thingproxy.freeboard.io/fetch/'
-            ];
-            
+            const cacheKey = secIds;
+
+            // 检查缓存
+            const now = Date.now();
+            if (realTimeDataCache.data[cacheKey] && (now - realTimeDataCache.timestamp) < realTimeDataCache.expiry) {
+                console.log('Using cached real-time data');
+                return realTimeDataCache.data[cacheKey];
+            }
+
+            // 使用后端代理API
+            const apiUrl = `/api/proxy-eastmoney-stock-data?secids=${secIds}`;
+            console.log('Fetching real-time data from backend:', apiUrl);
+
             try {
-                const response = await fetch(originalUrl, {
+                const response = await fetch(apiUrl, {
                     method: 'GET',
                     headers: {
-                        'Accept': 'application/json, text/plain, */*',
+                        'Accept': 'application/json',
                     }
                 });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('Direct fetch successful:', data);
-                    
-                    if (data.rc === 0 && data.data && data.data.diff) {
-                        const realTimeData = {};
-                        data.data.diff.forEach(item => {
-                            realTimeData[item.f12] = {
-                                price: item.f2,
-                                change: item.f3,
-                                amount: item.f6
-                            };
-                        });
-                        console.log('Parsed real-time data:', realTimeData);
-                        return realTimeData;
-                    }
+
+                if (!response.ok) {
+                    console.error(`Backend API returned status: ${response.status}`);
+                    return {};
+                }
+
+                const result = await response.json();
+
+                if (result && result.rc === 0 && result.data && result.data.diff) {
+                    const realTimeData = {};
+                    result.data.diff.forEach(item => {
+                        realTimeData[item.f12] = {
+                            price: item.f2,
+                            change: item.f3,
+                            amount: item.f6
+                        };
+                    });
+                    console.log('Backend fetch succeeded:', realTimeData);
+
+                    // 缓存数据
+                    realTimeDataCache.data[cacheKey] = realTimeData;
+                    realTimeDataCache.timestamp = now;
+
+                    return realTimeData;
+                } else {
+                    console.error('Invalid data format from backend:', result);
+                    return {};
                 }
             } catch (error) {
-                console.log('Direct fetch failed, trying CORS proxies:', error.message);
+                console.error('Error fetching real-time data from backend:', error);
+                return {};
             }
-            
-            for (const proxyUrl of corsProxies) {
-                try {
-                    const proxiedUrl = proxyUrl + encodeURIComponent(originalUrl);
-                    console.log(`Trying proxy: ${proxyUrl}`);
-                    
-                    const response = await fetch(proxiedUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Accept': 'application/json, text/plain, */*',
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        console.log(`Proxy ${proxyUrl} successful:`, data);
-                        
-                        if (data.rc === 0 && data.data && data.data.diff) {
-                            const realTimeData = {};
-                            data.data.diff.forEach(item => {
-                                realTimeData[item.f12] = {
-                                    price: item.f2,
-                                    change: item.f3,
-                                    amount: item.f6
-                                };
-                            });
-                            console.log('Parsed real-time data:', realTimeData);
-                            return realTimeData;
-                        }
-                    }
-                } catch (error) {
-                    console.error(`Proxy ${proxyUrl} failed:`, error.message);
-                    continue;
-                }
-            }
-            
-            console.log('All fetch methods failed');
-            return {};
         }
         
         function onDateChange() {
@@ -771,52 +791,37 @@
         
         async function renderStocks(stocks) {
             const detailBody = document.getElementById('detailBody');
-            detailBody.innerHTML = '<tr><td colspan="8" class="loading">加载实时数据中...</td></tr>';
-            
-            const codes = stocks.map(stock => stock.code);
-            console.log('Stocks to fetch:', codes);
-            const realTimeData = await fetchRealTimeData(codes);
-            
+
             detailBody.innerHTML = '';
-            
+
             stocks.forEach(stock => {
                 const row = detailBody.insertRow();
                 row.dataset.code = stock.code;
-                
+
                 const cleanCode = stock.code.includes('.') ? stock.code.split('.')[0] : stock.code;
-                
+
                 const nameCell = row.insertCell(0);
                 nameCell.textContent = stock.name;
-                
+
                 if (cleanCode.startsWith('3')) {
                     nameCell.style.color = '#ff9933';
                 } else if (cleanCode.startsWith('68')) {
                     nameCell.style.color = '#4d90fe';
                 }
-                
+
                 const boardsCell = row.insertCell(1);
                 boardsCell.textContent = stock.boards || '-';
                 if (stock.boards && stock.boards !== '') {
                     boardsCell.style.color = '#ff9933';
                     boardsCell.style.fontWeight = 'bold';
                 }
-                
+
                 const priceCell = row.insertCell(2);
+                priceCell.textContent = '加载中...';
+
                 const changeCell = row.insertCell(3);
-                if (realTimeData[cleanCode]) {
-                    const rtData = realTimeData[cleanCode];
-                    priceCell.textContent = rtData.price.toFixed(2);
-                    changeCell.textContent = formatChangeFromAPI(rtData.change);
-                    
-                    const isPositive = rtData.change > 0;
-                    priceCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
-                    changeCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
-                } else {
-                    priceCell.textContent = stock.price.toFixed(2);
-                    changeCell.textContent = formatChange(stock.change);
-                    changeCell.style.color = stock.change > 0 ? '#ff4d4d' : '#4CAF50';
-                }
-                
+                changeCell.textContent = '加载中...';
+
                 const timeCell = row.insertCell(4);
                 if (stock.enterTime) {
                     const date = new Date(stock.enterTime * 1000);
@@ -826,35 +831,87 @@
                 } else {
                     timeCell.textContent = '-';
                 }
-                
+
                 const amountCell = row.insertCell(5);
-                if (realTimeData[cleanCode] && realTimeData[cleanCode].amount) {
-                    amountCell.textContent = formatAmount(realTimeData[cleanCode].amount);
-                } else {
-                    amountCell.textContent = '-';
-                }
-                
+                amountCell.textContent = '加载中...';
+
                 const valueCell = row.insertCell(6);
                 valueCell.textContent = formatValue(stock.value);
-                
+
                 const descriptionCell = row.insertCell(7);
                 descriptionCell.className = 'description-column';
                 descriptionCell.textContent = stock.description || '-';
-                
+
                 row.style.cursor = 'pointer';
                 row.addEventListener('click', function(e) {
                     e.stopPropagation();
                     linkToTongDaXin(stock.code);
                 });
             });
+
+            // 异步加载实时数据
+            const codes = stocks.map(stock => stock.code);
+            console.log('Stocks to fetch:', codes);
+
+            try {
+                const realTimeData = await fetchRealTimeData(codes);
+
+                // 更新实时数据
+                stocks.forEach(stock => {
+                    const cleanCode = stock.code.includes('.') ? stock.code.split('.')[0] : stock.code;
+                    const row = detailBody.querySelector(`tr[data-code="${stock.code}"]`);
+
+                    if (row && realTimeData[cleanCode]) {
+                        const rtData = realTimeData[cleanCode];
+                        const priceCell = row.cells[2];
+                        const changeCell = row.cells[3];
+                        const amountCell = row.cells[5];
+
+                        priceCell.textContent = rtData.price.toFixed(2);
+                        changeCell.textContent = formatChangeFromAPI(rtData.change);
+
+                        const isPositive = rtData.change > 0;
+                        priceCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
+                        changeCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
+
+                        if (rtData.amount) {
+                            amountCell.textContent = formatAmount(rtData.amount);
+                        } else {
+                            amountCell.textContent = '-';
+                        }
+                    } else if (row) {
+                        // 如果没有实时数据，显示占位符
+                        const priceCell = row.cells[2];
+                        const changeCell = row.cells[3];
+                        const amountCell = row.cells[5];
+                        priceCell.textContent = '-';
+                        changeCell.textContent = '-';
+                        amountCell.textContent = '-';
+                    }
+                });
+            } catch (error) {
+                console.error('Error fetching real-time data:', error);
+                // 出错时显示占位符
+                stocks.forEach(stock => {
+                    const row = detailBody.querySelector(`tr[data-code="${stock.code}"]`);
+                    if (row) {
+                        const priceCell = row.cells[2];
+                        const changeCell = row.cells[3];
+                        const amountCell = row.cells[5];
+                        priceCell.textContent = '-';
+                        changeCell.textContent = '-';
+                        amountCell.textContent = '-';
+                    }
+                });
+            }
         }
         
         async function updateRealTimeData() {
             const detailBody = document.getElementById('detailBody');
             const rows = detailBody.querySelectorAll('tr');
-            
+
             if (rows.length === 0) return;
-            
+
             const codes = [];
             rows.forEach(row => {
                 const stockCode = row.dataset.code;
@@ -862,43 +919,38 @@
                     codes.push(stockCode);
                 }
             });
-            
+
             console.log('Updating real-time data for codes:', codes);
             const realTimeData = await fetchRealTimeData(codes);
             console.log('Received real-time data:', realTimeData);
-            
+
             rows.forEach((row, index) => {
                 const stockCode = row.dataset.code;
                 if (!stockCode) return;
-                
+
                 const cleanCode = stockCode.includes('.') ? stockCode.split('.')[0] : stockCode;
-                
+
                 console.log(`Updating row ${index}: stockCode=${stockCode}, cleanCode=${cleanCode}, rtData=`, realTimeData[cleanCode]);
-                
+
                 const priceCell = row.cells[2];
                 const changeCell = row.cells[3];
                 const amountCell = row.cells[5];
-                
+
                 if (realTimeData[cleanCode]) {
                     const rtData = realTimeData[cleanCode];
                     priceCell.textContent = rtData.price.toFixed(2);
                     changeCell.textContent = formatChangeFromAPI(rtData.change);
-                    
+
                     const isPositive = rtData.change > 0;
                     priceCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
                     changeCell.style.color = isPositive ? '#ff4d4d' : '#4CAF50';
-                    
+
                     console.log(`Updated with real-time data: price=${rtData.price}, change=${rtData.change}`);
                 } else {
-                    const currentPrice = parseFloat(priceCell.textContent);
-                    const currentChange = parseFloat(changeCell.textContent);
-                    priceCell.textContent = currentPrice.toFixed(2);
-                    changeCell.textContent = formatChange(currentChange);
-                    changeCell.style.color = currentChange > 0 ? '#ff4d4d' : '#4CAF50';
-                    
+                    // 没有实时数据时，保持原有显示不变
                     console.log(`No real-time data, keeping existing values`);
                 }
-                
+
                 if (realTimeData[cleanCode] && realTimeData[cleanCode].amount) {
                     amountCell.textContent = formatAmount(realTimeData[cleanCode].amount);
                     console.log(`Updated amount: ${realTimeData[cleanCode].amount}`);
@@ -933,30 +985,29 @@
         
         async function sortByChange() {
             if (currentStocks.length === 0) return;
-            
+
             if (currentSortField === 'change') {
                 sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
             } else {
                 sortDirection = 'desc';
             }
-            
-            const codes = currentStocks.map(stock => stock.code);
-            const realTimeData = await fetchRealTimeData(codes);
-            
+
+            const realTimeData = await fetchRealTimeData(currentStocks.map(stock => stock.code));
+
             const sortedStocks = [...currentStocks].sort((a, b) => {
                 const cleanCodeA = a.code.includes('.') ? a.code.split('.')[0] : a.code;
                 const cleanCodeB = b.code.includes('.') ? b.code.split('.')[0] : b.code;
-                
+
                 const changeA = realTimeData[cleanCodeA] ? realTimeData[cleanCodeA].change : a.change * 100;
                 const changeB = realTimeData[cleanCodeB] ? realTimeData[cleanCodeB].change : b.change * 100;
-                
+
                 if (sortDirection === 'desc') {
                     return changeB - changeA;
                 } else {
                     return changeA - changeB;
                 }
             });
-            
+
             currentSortField = 'change';
             updateSortIndicators();
             renderStocks(sortedStocks);
@@ -964,30 +1015,29 @@
         
         async function sortByAmount() {
             if (currentStocks.length === 0) return;
-            
+
             if (currentSortField === 'amount') {
                 sortDirection = sortDirection === 'desc' ? 'asc' : 'desc';
             } else {
                 sortDirection = 'desc';
             }
-            
-            const codes = currentStocks.map(stock => stock.code);
-            const realTimeData = await fetchRealTimeData(codes);
-            
+
+            const realTimeData = await fetchRealTimeData(currentStocks.map(stock => stock.code));
+
             const sortedStocks = [...currentStocks].sort((a, b) => {
                 const cleanCodeA = a.code.includes('.') ? a.code.split('.')[0] : a.code;
                 const cleanCodeB = b.code.includes('.') ? b.code.split('.')[0] : b.code;
-                
+
                 const amountA = realTimeData[cleanCodeA] && realTimeData[cleanCodeA].amount ? realTimeData[cleanCodeA].amount : 0;
                 const amountB = realTimeData[cleanCodeB] && realTimeData[cleanCodeB].amount ? realTimeData[cleanCodeB].amount : 0;
-                
+
                 if (sortDirection === 'desc') {
                     return amountB - amountA;
                 } else {
                     return amountA - amountB;
                 }
             });
-            
+
             currentSortField = 'amount';
             updateSortIndicators();
             renderStocks(sortedStocks);
